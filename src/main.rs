@@ -27,7 +27,7 @@ async fn main() -> Result<(), String> {
         .route("/insert_john", get(insert_users))
         .with_state(pool); // attach pool as shared state
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 1337));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
     println!("Server running on {addr}");
     axum_server::bind(addr)
         .serve(app.into_make_service())
