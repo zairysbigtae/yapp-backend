@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{extract::{Path, State}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::Serialize;
 use sqlx::{pool, PgPool};
@@ -24,6 +24,7 @@ async fn main() -> Result<(), String> {
     // router
     let app = Router::new()
         .route("/users", get(get_users))
+        .route("/users/:name", get(get_user))
         .route("/insert_john", get(insert_users))
         .with_state(pool); // attach pool as shared state
 
@@ -45,6 +46,19 @@ async fn get_users(State(pool): State<PgPool>) -> Json<Vec<User>> {
 
     let vec_users: Vec<User> = users.iter().map(|a| User { id: a.id as u32, name: a.name.clone()}).collect();
     Json(vec_users)
+}
+
+async fn get_user(
+    Path(name): Path<String>,
+    State(pool): State<PgPool>
+) -> Json<User> {
+    let rec_user = sqlx::query!("SELECT id, name FROM users WHERE name = $1", name)
+        .fetch_one(&pool)
+        .await
+        .expect("Couldnt get users");
+
+    let user = User { id: rec_user.id as u32, name: rec_user.name.clone() };
+    Json(user)
 }
 
 async fn insert_users(State(pool): State<PgPool>) -> impl IntoResponse {
