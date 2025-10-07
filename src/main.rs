@@ -24,7 +24,7 @@ async fn main() -> Result<(), String> {
     // router
     let app = Router::new()
         .route("/users", get(get_users))
-        .route("/users/:name", get(get_user))
+        .route("/users/{name}", get(get_user))
         .route("/insert_john", get(insert_users))
         .with_state(pool); // attach pool as shared state
 
