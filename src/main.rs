@@ -3,12 +3,23 @@ use std::net::SocketAddr;
 use axum::{extract::{Path, State}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::Serialize;
-use sqlx::{pool, PgPool};
+use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
+use chrono::NaiveDateTime;
 
 #[derive(Serialize)]
 struct User {
     id: u32,
     name: String,
+}
+
+#[derive(Serialize)]
+struct Message {
+    id: u32,
+    sender_id: u32,
+    receiver_id: u32,
+    content: String,
+    created_at: PrimitiveDateTime,
+    edited_at: Option<PrimitiveDateTime>,
 }
 
 #[tokio::main]
@@ -26,6 +37,8 @@ async fn main() -> Result<(), String> {
         .route("/users", get(get_users))
         .route("/users/{name}", get(get_user))
         .route("/insert_john", get(insert_users))
+        .route("/msgs", get(get_msgs))
+        .route("/insert_msg", get(insert_msgs))
         .with_state(pool); // attach pool as shared state
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
@@ -77,3 +90,50 @@ async fn insert_users(State(pool): State<PgPool>) -> impl IntoResponse {
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to insert user").into_response()
     }
 }
+
+async fn get_msgs(State(pool): State<PgPool>) -> Json<Vec<Message>> {
+    let msgs = sqlx::query!("SELECT id, content, sender_id, receiver_id, created_at, edited_at FROM messages")
+        .fetch_all(&pool)
+        .await
+        .expect("Couldnt get msgs");
+
+    let vec_msgs: Vec<Message> = msgs.iter()
+        .map(|msg| Message {
+            id: msg.id as u32,
+            content: msg.content.clone().unwrap_or("".to_string()),
+            sender_id: msg.sender_id.unwrap() as u32,
+            receiver_id: msg.receiver_id.unwrap() as u32,
+            created_at: msg.created_at.unwrap(),
+            edited_at: msg.edited_at,
+        }).collect();
+    Json(vec_msgs)
+}
+
+// async fn get_msg(
+//     Path(msg_id): Path<String>,
+//     State(pool): State<PgPool>
+// ) -> Json<msg> {
+//     let rec_msg = sqlx::query!("SELECT id, name FROM messages WHERE id = $1", msg_id)
+//         .fetch_one(&pool)
+//         .await
+//         .expect("Couldnt get msgs");
+//
+//     let msg = User { id: rec_msg.id as u32, name: rec_msg.name.clone() };
+//     Json(msg)
+// }
+
+async fn insert_msgs(State(pool): State<PgPool>) -> impl IntoResponse {
+    let content = "hello world";
+    let result = sqlx::query!(
+        "INSERT INTO messages (content) VALUES ($1)",
+        content
+    )
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, "msg inserted").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to insert msg").into_response()
+    }
+}
+
