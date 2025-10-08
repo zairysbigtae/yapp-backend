@@ -15,7 +15,7 @@ struct User {
 #[derive(Serialize)]
 struct Message {
     id: u32,
-    sender_id: u32,
+    sender_id: Option<u32>,
     receiver_id: u32,
     content: String,
     created_at: PrimitiveDateTime,
@@ -101,8 +101,8 @@ async fn get_msgs(State(pool): State<PgPool>) -> Json<Vec<Message>> {
         .map(|msg| Message {
             id: msg.id as u32,
             content: msg.content.clone().unwrap_or("".to_string()),
-            sender_id: msg.sender_id.unwrap() as u32,
-            receiver_id: msg.receiver_id.unwrap() as u32,
+            sender_id: Some(msg.sender_id.unwrap_or(0) as u32),
+            receiver_id: msg.receiver_id.unwrap_or(0) as u32,
             created_at: msg.created_at.unwrap(),
             edited_at: msg.edited_at,
         }).collect();
