@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::{extract::{Path, State}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{extract::{ws::WebSocket, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::Serialize;
 use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
@@ -39,6 +39,7 @@ async fn main() -> Result<(), String> {
         .route("/insert_john", get(insert_users))
         .route("/msgs", get(get_msgs))
         .route("/insert_msg", get(insert_msgs))
+        .route("/ws", get(ws_handler))
         .with_state(pool); // attach pool as shared state
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
@@ -49,6 +50,14 @@ async fn main() -> Result<(), String> {
         .unwrap();
 
     Ok(())
+}
+
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket);
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    println!("New websocket connection!");
 }
 
 async fn get_users(State(pool): State<PgPool>) -> Json<Vec<User>> {
