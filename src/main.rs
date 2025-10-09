@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::{extract::{ws::WebSocket, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{extract::{ws::{WebSocket}, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::Serialize;
 use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
@@ -58,6 +58,12 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 
 async fn handle_socket(mut socket: WebSocket) {
     println!("New websocket connection!");
+
+    let socket_stts = socket.send(axum::extract::ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
+    if socket_stts {
+        println!("Client disconnected early");
+        return;
+    }
 }
 
 async fn get_users(State(pool): State<PgPool>) -> Json<Vec<User>> {
