@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::{extract::{ws::{WebSocket}, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{extract::{ws::{self, WebSocket}, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::Serialize;
 use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
@@ -30,6 +30,10 @@ async fn main() -> Result<(), String> {
 
     // postgres connection pool
     let url = std::env::var("DATABASE_URL").expect("DATABASE_URL not set in .env");
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "1337".to_string())
+        .parse::<u16>()
+        .unwrap();
     let pool = PgPool::connect(&url).await.expect("Failed to connect to database");
 
     // router
@@ -42,7 +46,7 @@ async fn main() -> Result<(), String> {
         .route("/ws", get(ws_handler))
         .with_state(pool); // attach pool as shared state
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 1337));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Server running on {addr}");
     axum_server::bind(addr)
         .serve(app.into_make_service())
@@ -59,10 +63,26 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 async fn handle_socket(mut socket: WebSocket) {
     println!("New websocket connection!");
 
-    let socket_stts = socket.send(axum::extract::ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
+    let socket_stts = socket.send(ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
     if socket_stts {
         println!("Client disconnected early");
         return;
+    }
+
+    while let Some(Ok(msg)) = socket.recv().await {
+        match msg {
+            ws::Message::Text(text) => {
+                println!("Client says: {text}");
+                // echo back
+                let _ = socket.send(
+                    ws::Message::Text("I dont give a shit about your {text}".to_string().into())).await;
+            }
+            ws::Message::Close(_) => {
+                println!("User disconnected");
+                break;
+            }
+            _ => {}
+        }
     }
 }
 
