@@ -2,7 +2,8 @@ use std::net::SocketAddr;
 
 use axum::{extract::{ws::{self, WebSocket}, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
 use chrono::NaiveDateTime;
 
@@ -20,6 +21,13 @@ struct Message {
     content: String,
     created_at: PrimitiveDateTime,
     edited_at: Option<PrimitiveDateTime>,
+}
+
+#[derive(Deserialize)]
+struct NewMessage {
+    sender_id: Option<u32>,
+    receiver_id: u32,
+    content: String,
 }
 
 #[tokio::main]
@@ -42,7 +50,7 @@ async fn main() -> Result<(), String> {
         .route("/users/{name}", get(get_user))
         .route("/insert_john", get(insert_users))
         .route("/msgs", get(get_msgs))
-        .route("/insert_msg", get(insert_msgs))
+        .route("/insert_msg", post(insert_msgs))
         .route("/ws", get(ws_handler))
         .with_state(pool); // attach pool as shared state
 
@@ -157,18 +165,21 @@ async fn get_msgs(State(pool): State<PgPool>) -> Json<Vec<Message>> {
 //     Json(msg)
 // }
 
-async fn insert_msgs(State(pool): State<PgPool>) -> impl IntoResponse {
+async fn insert_msgs(
+    State(pool): State<PgPool>,
+    Json(payload): Json<NewMessage>
+) -> impl IntoResponse {
     let content = "hello world";
     let result = sqlx::query!(
         "INSERT INTO messages (content) VALUES ($1)",
-        content
+        payload.content,
+        // payload.sender_id,
+        // payload.receiver_id
     )
     .execute(&pool)
-    .await;
+    .await
+    .expect("Failed to insert message");
 
-    match result {
-        Ok(_) => (StatusCode::OK, "msg inserted").into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to insert msg").into_response()
-    }
+    Json(json!({"status": "ok"}))
 }
 
