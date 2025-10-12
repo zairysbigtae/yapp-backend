@@ -50,7 +50,7 @@ async fn main() -> Result<(), String> {
         .route("/users/{name}", get(get_user))
         .route("/insert_john", get(insert_users))
         .route("/msgs", get(get_msgs))
-        .route("/insert_msg", post(insert_msgs))
+        // .route("/insert_msg", post(insert_msgs))
         .route("/ws", get(ws_handler))
         .with_state(pool); // attach pool as shared state
 
@@ -64,11 +64,11 @@ async fn main() -> Result<(), String> {
     Ok(())
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket);
+async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl IntoResponse {
+    let _ = ws.on_upgrade(move |socket| handle_socket(socket, State(pool)));
 }
 
-async fn handle_socket(mut socket: WebSocket) {
+async fn handle_socket(mut socket: WebSocket, State(pool): State<PgPool>) {
     println!("New websocket connection!");
 
     let socket_stts = socket.send(ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
@@ -81,9 +81,34 @@ async fn handle_socket(mut socket: WebSocket) {
         match msg {
             ws::Message::Text(text) => {
                 println!("Client says: {text}");
-                // echo back
-                let _ = socket.send(
-                    ws::Message::Text("I dont give a shit about your {text}".to_string().into())).await;
+
+                match serde_json::from_str::<NewMessage>(&text) {
+                    Ok(_) => {
+                        let res = insert_msg_in_db(
+                            &pool,
+                            &NewMessage {
+                                sender_id: Some(0),
+                                receiver_id: 0,
+                                content: text.to_string()
+                            }
+                        )
+                        .await;
+
+                        match res {
+                            Ok(_) => {
+                                let _ = socket.send(ws::Message::Text(
+                                    json!({"status": "ok"}).to_string().into()
+                                )).await;
+                            }
+                            Err(e) => {
+                                let _ = socket.send(ws::Message::Text(
+                                    json!({"status": "error", "message": e.to_string()}).to_string().into()
+                                )).await;
+                            },
+                        }
+                    }
+                    Err(e) => todo!(),
+                }
             }
             ws::Message::Close(_) => {
                 println!("User disconnected");
@@ -165,10 +190,10 @@ async fn get_msgs(State(pool): State<PgPool>) -> Json<Vec<Message>> {
 //     Json(msg)
 // }
 
-async fn insert_msgs(
-    State(pool): State<PgPool>,
-    Json(payload): Json<NewMessage>
-) -> impl IntoResponse {
+async fn insert_msg_in_db(
+    pool: &PgPool,
+    payload: &NewMessage,
+) -> Result<(), sqlx::Error> {
     let content = "hello world";
     let result = sqlx::query!(
         "INSERT INTO messages (content) VALUES ($1)",
@@ -176,10 +201,9 @@ async fn insert_msgs(
         // payload.sender_id,
         // payload.receiver_id
     )
-    .execute(&pool)
-    .await
-    .expect("Failed to insert message");
+    .execute(pool)
+    .await?;
 
-    Json(json!({"status": "ok"}))
+    Ok(())
 }
 
