@@ -13,7 +13,7 @@ struct User {
     name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Message {
     id: u32,
     sender_id: Option<u32>,
@@ -73,7 +73,9 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
 
     // get msgs first
     if let Ok(msgs) = get_all_msgs(&pool).await {
-        println!("{msgs:?}");
+        for msg in msgs {
+            println!("{}", msg.content);
+        }
     }
 
     while let Some(Ok(msg)) = socket.recv().await {
@@ -107,7 +109,18 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
                             },
                         }
                     }
-                    _ => ()
+                    Err(e) => {
+                        insert_msg_in_db(
+                            &pool,
+                            &NewMessage {
+                                sender_id: Some(0),
+                                receiver_id: 0,
+                                content: text.to_string()
+                            }
+                        )
+                        .await
+                        .unwrap();
+                    }
                 }
             }
             ws::Message::Close(_) => {
