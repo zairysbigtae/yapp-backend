@@ -70,7 +70,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl In
 
 async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
     println!("New websocket connection!");
-    socket.send(Message::Text("Sup bruh?".to_string()));
+    socket.send(Message::Text("Sup bruh?".into()));
 
     // get msgs first
     if let Ok(mut msgs) = get_all_msgs(&pool).await {
