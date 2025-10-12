@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use axum_server::Server;
 use axum::{extract::{ws::{self, WebSocket}, Path, State, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
@@ -56,7 +57,7 @@ async fn main() -> Result<(), String> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Server running on {addr}");
-    axum_server::bind(addr)
+    Server::bind(addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
