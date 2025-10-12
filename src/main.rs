@@ -73,8 +73,8 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
 
     // get msgs first
     if let Ok(msgs) = get_all_msgs(&pool).await {
-        for msg in msgs {
-            println!("{}", msg.content);
+        for (i, msg) in msgs.iter().enumerate() {
+            println!("{i}. {}", msg.content);
         }
     }
 
@@ -84,44 +84,16 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
                 println!("Client says: {text}");
                 socket.send(ws::Message::Text(format!("inserted {text} into database").into())).await.unwrap();
 
-                match serde_json::from_str::<NewMessage>(&text) {
-                    Ok(_) => {
-                        let res = insert_msg_in_db(
-                            &pool,
-                            &NewMessage {
-                                sender_id: Some(0),
-                                receiver_id: 0,
-                                content: text.to_string()
-                            }
-                        )
-                        .await;
-
-                        match res {
-                            Ok(_) => {
-                                socket.send(ws::Message::Text(
-                                    json!({"status": "ok"}).to_string().into()
-                                )).await.unwrap();
-                            }
-                            Err(e) => {
-                                socket.send(ws::Message::Text(
-                                    json!({"status": "error", "message": e.to_string()}).to_string().into()
-                                )).await.unwrap();
-                            },
-                        }
+                insert_msg_in_db(
+                    &pool,
+                    &NewMessage {
+                        sender_id: Some(0),
+                        receiver_id: 0,
+                        content: text.to_string()
                     }
-                    Err(e) => {
-                        insert_msg_in_db(
-                            &pool,
-                            &NewMessage {
-                                sender_id: Some(0),
-                                receiver_id: 0,
-                                content: text.to_string()
-                            }
-                        )
-                        .await
-                        .unwrap();
-                    }
-                }
+                )
+                .await
+                .unwrap();
             }
             ws::Message::Close(_) => {
                 println!("User disconnected");
