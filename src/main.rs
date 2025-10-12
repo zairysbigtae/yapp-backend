@@ -82,7 +82,7 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
         match msg {
             ws::Message::Text(text) => {
                 println!("Client says: {text}");
-                socket.send(ws::Message::Text("I dont give a shit about your text".into())).await.unwrap();
+                socket.send(ws::Message::Text(format!("I dont give a shit about your {text}").into())).await.unwrap();
 
                 match serde_json::from_str::<NewMessage>(&text) {
                     Ok(_) => {
