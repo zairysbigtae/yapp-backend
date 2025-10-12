@@ -6,7 +6,6 @@ use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{pool, types::time::PrimitiveDateTime, PgPool};
-use chrono::NaiveDateTime;
 
 #[derive(Serialize)]
 struct User {
@@ -50,7 +49,7 @@ async fn main() -> Result<(), String> {
         .route("/users", get(get_users))
         .route("/users/{name}", get(get_user))
         .route("/insert_john", get(insert_users))
-        .route("/msgs", get(get_msgs))
+        // .route("/msgs", get(get_msgs))
         // .route("/insert_msg", post(insert_msgs))
         .route("/ws", get(ws_handler))
         .with_state(pool); // attach pool as shared state
@@ -72,10 +71,9 @@ async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl In
 async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
     println!("New websocket connection!");
 
-    let socket_stts = socket.send(ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
-    if socket_stts {
-        println!("Client disconnected early");
-        return;
+    // get msgs first
+    if let Ok(msgs) = get_all_msgs(&pool).await {
+        println!("{msgs:?}");
     }
 
     while let Some(Ok(msg)) = socket.recv().await {
@@ -98,18 +96,18 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
 
                         match res {
                             Ok(_) => {
-                                let _ = socket.send(ws::Message::Text(
+                                socket.send(ws::Message::Text(
                                     json!({"status": "ok"}).to_string().into()
-                                )).await;
+                                )).await.unwrap();
                             }
                             Err(e) => {
-                                let _ = socket.send(ws::Message::Text(
+                                socket.send(ws::Message::Text(
                                     json!({"status": "error", "message": e.to_string()}).to_string().into()
-                                )).await;
+                                )).await.unwrap();
                             },
                         }
                     }
-                    Err(e) => todo!(),
+                    _ => ()
                 }
             }
             ws::Message::Close(_) => {
@@ -119,6 +117,22 @@ async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
             _ => {}
         }
     }
+}
+
+async fn get_all_msgs(pool: &PgPool) -> Result<Vec<Message>, sqlx::Error> {
+    let msgs = sqlx::query!("SELECT id, sender_id, receiver_id, content, created_at, edited_at FROM messages ORDER BY id DESC")
+        .fetch_all(pool)
+        .await
+        .expect("Couldnt get all messages");
+
+    Ok(msgs.into_iter().map(|msg| Message {
+        id: msg.id as u32,
+        sender_id: Some(msg.sender_id.unwrap_or(0) as u32),
+        receiver_id: msg.receiver_id.unwrap_or(0) as u32,
+        content: msg.content.unwrap_or("".to_string()),
+        created_at: msg.created_at.unwrap(),
+        edited_at: msg.edited_at,
+    }).collect())
 }
 
 async fn get_users(State(pool): State<PgPool>) -> Json<Vec<User>> {
