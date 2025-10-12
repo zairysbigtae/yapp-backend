@@ -66,7 +66,7 @@ async fn main() -> Result<(), String> {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl IntoResponse {
-    let _ = ws.on_upgrade(move |socket| handle_socket(socket, State(pool)));
+    ws.on_upgrade(move |socket| handle_socket(socket, State(pool)))
 }
 
 async fn handle_socket(mut socket: WebSocket, State(pool): State<PgPool>) {
