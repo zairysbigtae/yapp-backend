@@ -70,12 +70,13 @@ async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl In
 
 async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
     println!("New websocket connection!");
+    socket.send(Message::Text("Sup bruh?".to_string()));
 
     // get msgs first
-    if let Ok(msgs) = get_all_msgs(&pool).await {
-        for (i, msg) in msgs.iter().enumerate() {
-            println!("{i}. {}", msg.content);
-        }
+    if let Ok(mut msgs) = get_all_msgs(&pool).await {
+        msgs.reverse();
+        let json_str = serde_json::to_string(&msgs).unwrap();
+        socket.send(ws::Message::Text(json_str.into())).await.unwrap();
     }
 
     while let Some(Ok(msg)) = socket.recv().await {
