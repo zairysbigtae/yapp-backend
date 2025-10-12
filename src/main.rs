@@ -66,10 +66,10 @@ async fn main() -> Result<(), String> {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(pool): State<PgPool>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, State(pool)))
+    ws.on_upgrade(move |socket| handle_socket(socket, pool))
 }
 
-async fn handle_socket(mut socket: WebSocket, State(pool): State<PgPool>) {
+async fn handle_socket(mut socket: WebSocket, pool: PgPool) {
     println!("New websocket connection!");
 
     let socket_stts = socket.send(ws::Message::Text("Hello dude!".to_string().into())).await.is_err();
